@@ -40,3 +40,6 @@ clean: ## Supprime les conteneurs et volumes du projet (⚠️ efface le cache d
 
 prune: ## Nettoie les images Docker inutilisées sur la machine
 	docker image prune -f
+
+test-backend: ## Lance les tests unitaires du backend
+	docker compose exec backend pytest -v

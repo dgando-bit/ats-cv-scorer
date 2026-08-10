@@ -18,6 +18,7 @@ RUN python -m spacy download fr_core_news_lg
 # Le modèle sentence-transformers sera téléchargé au premier lancement
 # et mis en cache dans le volume model_cache (voir docker-compose.yml)
 
+COPY pytest.ini .
 COPY ./app ./app
 
 EXPOSE 8000

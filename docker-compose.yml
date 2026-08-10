@@ -8,6 +8,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/app:/app/app          # hot-reload du code en dev
+      - ./backend/tests:/app/tests      # tests unitaires (pytest)
+      - ./backend/pytest.ini:/app/pytest.ini
       - model_cache:/root/.cache        # cache des modèles HuggingFace / sentence-transformers
     environment:
       - HF_HOME=/root/.cache/huggingface

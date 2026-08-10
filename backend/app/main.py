@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import upload
+
 app = FastAPI(
     title="ATS CV Scorer API",
     description="API d'analyse de CV et de matching sémantique avec des offres d'emploi",
@@ -26,6 +28,9 @@ def health_check():
 def root():
     return {"message": "ATS CV Scorer API — voir /docs pour la documentation interactive"}
 
-# Les routers (upload, score, match) seront branchés ici au fur et à mesure :
-# from app.routers import upload, score, match
-# app.include_router(upload.router, prefix="/api/cv", tags=["cv"])
+
+app.include_router(upload.router, prefix="/api/cv", tags=["cv"])
+
+# Les prochains routers (score, match) seront branchés de la même façon :
+# from app.routers import score, match
+# app.include_router(score.router, prefix="/api/score", tags=["score"])

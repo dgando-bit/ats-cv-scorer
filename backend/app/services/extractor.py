@@ -6,7 +6,7 @@ Architecture hybride, chaque type d'entité utilisant l'outil le plus
 adapté plutôt qu'un unique modèle "universel" :
   - SKILL       : EntityRuler spaCy + taxonomie (services/extractor.py)
   - EMAIL/PHONE : regex (format très régulier, le NER n'apporte rien)
-  - DATES/DURÉE : modèle CamemBERT pré-entraîné (à intégrer ensuite)
+  - DATES/DURÉE : modèle CamemBERT pré-entraîné (Jean-Baptiste/camembert-ner-with-dates)
 """
 
 from __future__ import annotations
@@ -18,8 +18,19 @@ from pathlib import Path
 
 import spacy
 from spacy.language import Language
+from transformers import AutoModelForTokenClassification, AutoTokenizer
+from transformers import pipeline as hf_pipeline
 
 TAXONOMY_PATH = Path(__file__).parent.parent / "data" / "skills_taxonomy.json"
+
+_DATE_MODEL_NAME = "Jean-Baptiste/camembert-ner-with-dates"
+_DATE_MIN_CONFIDENCE = 0.5
+# Limite approximative (pas un comptage exact de tokens) pour rester
+# sous la limite de séquence de CamemBERT (512 tokens). Un CV plus
+# long verra sa fin ignorée par extract_dates() — limite acceptée pour
+# un premier jet ; un découpage en chunks serait la vraie solution si
+# ça s'avère gênant en pratique.
+_MAX_CHARS_FOR_DATE_MODEL = 2000
 
 # Regex email : pragmatique, pas 100% conforme RFC 5322 (qui est
 # notoirement complexe), mais couvre la quasi-totalité des adresses
@@ -128,3 +139,59 @@ def extract_phone(text: str) -> str | None:
     """
     match = _PHONE_PATTERN.search(text)
     return match.group(0).strip() if match else None
+
+
+@lru_cache(maxsize=1)
+def _get_date_ner_pipeline():
+    """
+    Charge (une seule fois, en cache) le pipeline CamemBERT pour la
+    détection de dates/durées.
+
+    use_fast=False : contourne un bug de conversion du tokenizer
+    SentencePiece vers l'implémentation "fast" avec la version de
+    transformers installée (AttributeError sur vocab_file — déjà
+    rencontré lors du test manuel du modèle, voir
+    training/test_pretrained_ner.py).
+
+    Contrairement à _get_skill_nlp() (rapide à construire), charger un
+    modèle BERT de ~440 Mo a un coût réel — le cache est encore plus
+    important ici pour ne pas le refaire à chaque requête.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(_DATE_MODEL_NAME, use_fast=False)
+    model = AutoModelForTokenClassification.from_pretrained(_DATE_MODEL_NAME)
+    return hf_pipeline(
+        "ner",
+        model=model,
+        tokenizer=tokenizer,
+        aggregation_strategy="simple",
+    )
+
+
+def extract_dates(text: str) -> list[str]:
+    """
+    Détecte les dates et durées (ex: "10+ ans", "2021 - 2025") dans le
+    texte, via le modèle CamemBERT pré-entraîné.
+
+    Contrairement à extract_skills() (taxonomie fermée et fiable), ce
+    modèle généraliste n'est pas spécialisé CV — on filtre donc sur un
+    seuil de confiance minimum (_DATE_MIN_CONFIDENCE) pour écarter les
+    détections peu fiables plutôt que de tout retourner brut.
+
+    Returns:
+        Liste des dates/durées trouvées, dans l'ordre d'apparition dans
+        le texte (pas de tri ni de déduplication — contrairement aux
+        compétences, deux dates identiques peuvent être légitimement
+        distinctes, ex: deux expériences démarrées la même année).
+    """
+    ner_pipeline = _get_date_ner_pipeline()
+
+    # Troncature de sécurité : voir le commentaire sur
+    # _MAX_CHARS_FOR_DATE_MODEL en haut du fichier.
+    truncated_text = text[:_MAX_CHARS_FOR_DATE_MODEL]
+
+    results = ner_pipeline(truncated_text)
+    return [
+        r["word"].strip()
+        for r in results
+        if r["entity_group"] == "DATE" and r["score"] >= _DATE_MIN_CONFIDENCE
+    ]

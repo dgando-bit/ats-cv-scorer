@@ -1,4 +1,6 @@
-from app.services.extractor import extract_email, extract_phone, extract_skills
+from unittest.mock import patch
+
+from app.services.extractor import extract_dates, extract_email, extract_phone, extract_skills
 
 
 def test_extracts_known_skill_exact_case():
@@ -126,3 +128,85 @@ def test_extracts_phone_from_real_cv_contact_section():
     text = "Contact\n+33 6 70 50 41 98\nd.gbakary@outlook.com\nThiais, France"
     assert extract_phone(text) == "+33 6 70 50 41 98"
     assert extract_email(text) == "d.gbakary@outlook.com"
+
+
+# --- extract_dates ---
+#
+# Contrairement aux tests précédents (100% déterministes), extract_dates()
+# dépend d'un modèle BERT externe. On sépare deux familles de tests :
+#   - tests "logique" (mockés, rapides, déterministes) : vérifient le
+#     comportement de extract_dates() (filtrage, ordre, troncature)
+#     indépendamment de ce que le modèle détecte réellement
+#   - un test "intégration" (le vrai modèle, plus lent) : vérifie qu'un
+#     cas concret déjà validé manuellement fonctionne toujours
+
+
+def _fake_entity(word: str, score: float, entity_group: str = "DATE") -> dict:
+    """Construit un faux résultat au format renvoyé par le pipeline
+    transformers, pour simuler la sortie du modèle sans l'exécuter."""
+    return {"word": word, "score": score, "entity_group": entity_group}
+
+
+@patch("app.services.extractor._get_date_ner_pipeline")
+def test_filters_out_low_confidence_results(mock_get_pipeline):
+    mock_pipeline = mock_get_pipeline.return_value
+    mock_pipeline.return_value = [
+        _fake_entity("2020", score=0.9),
+        _fake_entity("2019", score=0.3),  # sous le seuil (_DATE_MIN_CONFIDENCE = 0.5)
+    ]
+    assert extract_dates("texte quelconque") == ["2020"]
+
+
+@patch("app.services.extractor._get_date_ner_pipeline")
+def test_ignores_non_date_entity_groups(mock_get_pipeline):
+    mock_pipeline = mock_get_pipeline.return_value
+    mock_pipeline.return_value = [
+        _fake_entity("Paris", score=0.9, entity_group="LOC"),
+        _fake_entity("2021", score=0.9, entity_group="DATE"),
+    ]
+    assert extract_dates("texte quelconque") == ["2021"]
+
+
+@patch("app.services.extractor._get_date_ner_pipeline")
+def test_preserves_order_and_duplicates(mock_get_pipeline):
+    """Contrairement à extract_skills(), pas de tri ni de déduplication :
+    deux dates identiques peuvent être légitimement distinctes."""
+    mock_pipeline = mock_get_pipeline.return_value
+    mock_pipeline.return_value = [
+        _fake_entity("2020", score=0.9),
+        _fake_entity("2020", score=0.9),
+        _fake_entity("2021", score=0.9),
+    ]
+    assert extract_dates("texte quelconque") == ["2020", "2020", "2021"]
+
+
+@patch("app.services.extractor._get_date_ner_pipeline")
+def test_empty_string_returns_empty_list(mock_get_pipeline):
+    mock_pipeline = mock_get_pipeline.return_value
+    mock_pipeline.return_value = []
+    assert extract_dates("") == []
+
+
+@patch("app.services.extractor._get_date_ner_pipeline")
+def test_truncates_text_before_calling_model(mock_get_pipeline):
+    """Vérifie la troncature de sécurité (_MAX_CHARS_FOR_DATE_MODEL) :
+    on inspecte ce qui est réellement envoyé au pipeline, sans avoir
+    besoin d'un texte de 2000+ caractères ni du vrai modèle."""
+    mock_pipeline = mock_get_pipeline.return_value
+    mock_pipeline.return_value = []
+
+    long_text = "a" * 5000
+    extract_dates(long_text)
+
+    called_text = mock_pipeline.call_args[0][0]
+    assert len(called_text) <= 2000
+
+
+def test_real_model_extracts_duration_from_cv_text():
+    """Test d'intégration (PAS mocké) : reproduit le cas déjà validé
+    manuellement dans training/test_pretrained_ner.py, où CamemBERT
+    détecte "10+ ans" avec 0.99 de confiance. Plus lent que les autres
+    tests (charge le vrai modèle BERT en mémoire)."""
+    text = "Fort de 10+ ans d'expérience en développement back-end"
+    result = extract_dates(text)
+    assert any("10" in date for date in result)

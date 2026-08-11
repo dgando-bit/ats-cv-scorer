@@ -1,4 +1,4 @@
-from app.services.extractor import extract_skills
+from app.services.extractor import extract_email, extract_phone, extract_skills
 
 
 def test_extracts_known_skill_exact_case():
@@ -67,3 +67,62 @@ def test_real_cv_skill_section():
         "SQL", "PostgreSQL", "MLflow", "DVC", "Airflow", "GCP", "AWS",
     }
     assert expected_subset.issubset(set(result))
+
+
+# --- extract_email ---
+
+
+def test_extracts_simple_email():
+    assert extract_email("Contact : jean.dupont@gmail.com") == "jean.dupont@gmail.com"
+
+
+def test_extracts_email_with_dots_and_plus():
+    text = "Écrivez-moi à d.gbakary+cv@outlook.com pour toute question."
+    assert extract_email(text) == "d.gbakary+cv@outlook.com"
+
+
+def test_returns_none_when_no_email():
+    assert extract_email("Aucune adresse ici, juste du texte.") is None
+
+
+def test_extracts_first_email_when_multiple():
+    text = "Pro: contact@entreprise.com Perso: jean@gmail.com"
+    assert extract_email(text) == "contact@entreprise.com"
+
+
+def test_does_not_match_malformed_email():
+    """Pas de @ ou pas de domaine valide : ne doit rien matcher."""
+    assert extract_email("Suivez-moi sur Twitter @jean_dupont") is None
+
+
+# --- extract_phone ---
+
+
+def test_extracts_phone_with_international_prefix_and_spaces():
+    assert extract_phone("+33 6 70 50 41 98") == "+33 6 70 50 41 98"
+
+
+def test_extracts_phone_with_leading_zero_and_spaces():
+    assert extract_phone("06 70 50 41 98") == "06 70 50 41 98"
+
+
+def test_extracts_phone_without_separators():
+    assert extract_phone("0670504198") == "0670504198"
+
+
+def test_extracts_phone_with_dots():
+    assert extract_phone("06.70.50.41.98") == "06.70.50.41.98"
+
+
+def test_extracts_phone_with_dashes():
+    assert extract_phone("06-70-50-41-98") == "06-70-50-41-98"
+
+
+def test_returns_none_when_no_phone():
+    assert extract_phone("Pas de numéro dans ce texte.") is None
+
+
+def test_extracts_phone_from_real_cv_contact_section():
+    text = "Contact\n+33 6 70 50 41 98\nd.gbakary@outlook.com\nThiais, France"
+    assert extract_phone(text) == "+33 6 70 50 41 98"
+    assert extract_email(text) == "d.gbakary@outlook.com"

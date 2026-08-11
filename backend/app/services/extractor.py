@@ -12,6 +12,7 @@ adapté plutôt qu'un unique modèle "universel" :
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,6 +20,17 @@ import spacy
 from spacy.language import Language
 
 TAXONOMY_PATH = Path(__file__).parent.parent / "data" / "skills_taxonomy.json"
+
+# Regex email : pragmatique, pas 100% conforme RFC 5322 (qui est
+# notoirement complexe), mais couvre la quasi-totalité des adresses
+# réelles rencontrées sur des CV.
+_EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+# Regex téléphone français : gère +33/0033 ou le 0 initial, suivi de
+# 9 chiffres groupés par 2, avec séparateurs optionnels (espace, point,
+# tiret) ou aucun séparateur. Ne couvre PAS les formats internationaux
+# hors France — limite acceptée vu le contexte du projet (CV en français).
+_PHONE_PATTERN = re.compile(r"(?:(?:\+33|0033)[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}")
 
 
 @lru_cache(maxsize=1)
@@ -90,3 +102,29 @@ def extract_skills(text: str) -> list[str]:
     }
 
     return sorted(found_skills)
+
+
+def extract_email(text: str) -> str | None:
+    """
+    Extrait la première adresse email trouvée dans le texte.
+
+    Returns:
+        L'adresse email, ou None si aucune n'est trouvée. Un CV n'a
+        normalement qu'une seule adresse de contact, donc contrairement
+        à extract_skills(), on ne retourne qu'un seul résultat, pas
+        une liste.
+    """
+    match = _EMAIL_PATTERN.search(text)
+    return match.group(0) if match else None
+
+
+def extract_phone(text: str) -> str | None:
+    """
+    Extrait le premier numéro de téléphone français trouvé dans le texte.
+
+    Returns:
+        Le numéro tel que trouvé dans le texte (espaces/séparateurs
+        d'origine préservés), ou None si aucun n'est trouvé.
+    """
+    match = _PHONE_PATTERN.search(text)
+    return match.group(0).strip() if match else None

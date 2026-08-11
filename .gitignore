@@ -16,3 +16,4 @@ dist/
 
 # Data
 backend/training/data
+backend/training/output/

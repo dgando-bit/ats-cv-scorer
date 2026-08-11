@@ -9,6 +9,7 @@ services:
     volumes:
       - ./backend/app:/app/app          # hot-reload du code en dev
       - ./backend/tests:/app/tests      # tests unitaires (pytest)
+      - ./backend/training:/app/training # scripts d'entraînement NER
       - ./backend/pytest.ini:/app/pytest.ini
       - model_cache:/root/.cache        # cache des modèles HuggingFace / sentence-transformers
     environment:

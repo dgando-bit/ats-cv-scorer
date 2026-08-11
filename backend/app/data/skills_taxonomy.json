@@ -1,0 +1,37 @@
+{
+  "programming_languages": [
+    "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "C", "Go",
+    "Rust", "PHP", "Ruby", "Swift", "Kotlin", "SQL", "R", "Scala", "Bash",
+    "PowerShell", "MATLAB", "Perl"
+  ],
+  "frameworks_libraries": [
+    "FastAPI", "Flask", "Django", "React", "Vue.js", "Angular", "Spring",
+    "Spring Boot", "Express.js", "Node.js", "Scikit-learn", "TensorFlow",
+    "PyTorch", "Keras", "Pandas", "NumPy", ".NET", "Next.js", "Nuxt.js",
+    "Laravel", "Symfony", "Hibernate"
+  ],
+  "databases": [
+    "PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "Oracle",
+    "Elasticsearch", "Cassandra", "MariaDB", "DynamoDB", "Neo4j",
+    "Microsoft SQL Server"
+  ],
+  "cloud_devops": [
+    "AWS", "GCP", "Azure", "Docker", "Kubernetes", "Terraform", "Jenkins",
+    "GitLab CI", "GitHub Actions", "Ansible", "CircleCI", "Nginx",
+    "Apache", "Prometheus", "Grafana"
+  ],
+  "data_ml": [
+    "Machine Learning", "Deep Learning", "NLP", "Computer Vision",
+    "MLflow", "DVC", "Airflow", "Spark", "Hadoop", "CNN", "RNN", "LLM",
+    "RAG", "XGBoost", "LightGBM", "Data Engineering", "ETL",
+    "Reinforcement Learning", "Transformers"
+  ],
+  "tools_versioning": [
+    "Git", "GitHub", "GitLab", "Jira", "Confluence", "Slack", "Bitbucket",
+    "Trello", "Notion", "Figma"
+  ],
+  "methodologies": [
+    "Agile", "Scrum", "Kanban", "DevOps", "CI/CD", "TDD", "MLOps",
+    "Lean", "SAFe"
+  ]
+}

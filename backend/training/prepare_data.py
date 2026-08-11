@@ -19,7 +19,7 @@ import random
 from pathlib import Path
 
 import spacy
-from spacy.tokens import Doc, DocBin
+from spacy.tokens import Doc, DocBin, Span
 from spacy.util import filter_spans
 
 RAW_DATA_PATH = Path(__file__).parent / "data" / "raw" / "train.json"
@@ -42,16 +42,61 @@ def _load_raw_records(limit: int | None) -> list[dict]:
     return records
 
 
+def _trim_entity_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """
+    Rogne les espaces (et retours à la ligne) en début/fin de span.
+
+    Nécessaire car certaines annotations du dataset incluent un espace
+    en bordure (ex: " Java " au lieu de "Java"), ce qui fait échouer
+    l'entraînement spaCy avec l'erreur E024 : le parser à transitions
+    ne peut pas superviser une entité mal délimitée.
+    """
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _trim_whitespace_tokens(span: Span, doc: Doc) -> Span | None:
+    """
+    Rogne les tokens purement composés d'espaces en début/fin de span.
+
+    Distinct de _trim_entity_span : ici on travaille au niveau des
+    TOKENS spaCy (après tokenisation), pas des caractères bruts. Un
+    double espace dans le texte source peut être tokenisé comme un
+    token à part entière ; s'il tombe en bordure d'entité, spaCy le
+    rejette (erreur E024) même si le texte brut ne présente aucun
+    espace visible en trop selon _trim_entity_span.
+    """
+    start, end = span.start, span.end
+    while start < end and doc[start].is_space:
+        start += 1
+    while end > start and doc[end - 1].is_space:
+        end -= 1
+    if start >= end:
+        return None
+    return Span(doc, start, end, label=span.label)
+
+
 def _record_to_doc(record: dict, nlp: spacy.language.Language) -> Doc:
     text = record["text"]
     doc = nlp.make_doc(text)
 
     spans = []
     for start, end, label in record["annotations"]:
+        start, end = _trim_entity_span(text, start, end)
+        if start >= end:
+            continue  # span vide après rognage : rien à annoter
+
         # alignment_mode="contract" : si le span annoté ne tombe pas
         # exactement sur une frontière de token spaCy, on le rétrécit
         # plutôt que de le perdre.
         span = doc.char_span(start, end, label=label, alignment_mode="contract")
+        if span is None:
+            continue
+
+        span = _trim_whitespace_tokens(span, doc)
         if span is not None:
             spans.append(span)
 
@@ -94,6 +139,21 @@ def main() -> None:
     print(f"Lecture de {RAW_DATA_PATH}...")
     records = _load_raw_records(args.limit)
     print(f"{len(records)} exemples chargés.")
+
+    # Le dataset agrège 4 sources qui se recoupent probablement : on
+    # dédoublonne par texte exact pour éviter qu'un même CV se retrouve
+    # à la fois dans le train et le dev (fuite de données qui fausserait
+    # l'évaluation).
+    seen_texts: set[str] = set()
+    deduped_records = []
+    for r in records:
+        if r["text"] not in seen_texts:
+            seen_texts.add(r["text"])
+            deduped_records.append(r)
+    n_duplicates = len(records) - len(deduped_records)
+    if n_duplicates:
+        print(f"{n_duplicates} doublons exacts retirés.")
+    records = deduped_records
 
     labels_found = {label for r in records for _, _, label in r["annotations"]}
     print(f"Labels détectés : {sorted(labels_found)}")

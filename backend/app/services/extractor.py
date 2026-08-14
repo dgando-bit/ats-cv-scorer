@@ -21,6 +21,8 @@ from spacy.language import Language
 from transformers import AutoModelForTokenClassification, AutoTokenizer
 from transformers import pipeline as hf_pipeline
 
+from app.models.cv import CVEntities
+
 TAXONOMY_PATH = Path(__file__).parent.parent / "data" / "skills_taxonomy.json"
 
 _DATE_MODEL_NAME = "Jean-Baptiste/camembert-ner-with-dates"
@@ -177,6 +179,14 @@ def extract_dates(text: str) -> list[str]:
     seuil de confiance minimum (_DATE_MIN_CONFIDENCE) pour écarter les
     détections peu fiables plutôt que de tout retourner brut.
 
+    ⚠️ Limite connue (constatée sur un vrai CV, TODO pour plus tard) :
+    ce modèle généraliste produit encore du bruit dans certains cas —
+    faux positifs sur des fragments de numéro de téléphone, fusion
+    erronée d'un code postal avec l'année adjacente à travers un saut
+    de ligne, bordures de span parfois imprécises (ex: parenthèse
+    orpheline). Accepté tel quel pour l'instant ; à nettoyer en
+    post-traitement si ça s'avère gênant en usage réel.
+
     Returns:
         Liste des dates/durées trouvées, dans l'ordre d'apparition dans
         le texte (pas de tri ni de déduplication — contrairement aux
@@ -195,3 +205,20 @@ def extract_dates(text: str) -> list[str]:
         for r in results
         if r["entity_group"] == "DATE" and r["score"] >= _DATE_MIN_CONFIDENCE
     ]
+
+
+def extract_entities(text: str) -> CVEntities:
+    """
+    Orchestrateur : exécute les quatre extractions (compétences, email,
+    téléphone, dates) sur le même texte et assemble le résultat.
+
+    C'est le seul point d'entrée que les routers de l'API doivent
+    appeler — ils n'ont pas à connaître le détail de chaque extraction
+    individuelle (EntityRuler, regex, CamemBERT).
+    """
+    return CVEntities(
+        skills=extract_skills(text),
+        email=extract_email(text),
+        phone=extract_phone(text),
+        dates=extract_dates(text),
+    )

@@ -38,15 +38,6 @@ def test_coverage_no_match():
     assert missing == ["Python"]
 
 
-def test_coverage_empty_required_skills_returns_full_coverage():
-    """Aucune compétence requise détectée dans l'offre : on ne peut pas
-    pénaliser le CV pour quelque chose qui n'est pas demandé."""
-    coverage, matched, missing = _compute_skill_coverage(cv_skills=["Python"], required_skills=[])
-    assert coverage == 1.0
-    assert matched == []
-    assert missing == []
-
-
 # --- compute_match_score (mocké : on teste la pondération, pas le NLP) ---
 
 
@@ -91,6 +82,29 @@ def test_zero_semantic_and_zero_coverage_gives_zero_overall(mock_similarity, moc
     result = compute_match_score("texte cv", "texte offre")
 
     assert result.overall_score == 0.0
+
+
+@patch("app.services.scorer.extract_skills")
+@patch("app.services.scorer.compute_semantic_similarity")
+def test_no_required_skills_falls_back_to_semantic_only(mock_similarity, mock_extract):
+    """Reproduit le cas réel découvert en test manuel (CV technique vs
+    offre non-technique) : quand aucune compétence n'est détectée dans
+    l'offre, le score global doit reposer entièrement sur le score
+    sémantique, pas sur un fallback de couverture à 100% qui gonflerait
+    artificiellement le résultat."""
+    mock_similarity.return_value = 0.394  # reproduit le cas réel (39.4%)
+    mock_extract.side_effect = [
+        ["Python", "Docker"],  # CV a des compétences...
+        [],  # ...mais l'offre n'en mentionne aucune de la taxonomie
+    ]
+
+    result = compute_match_score("texte cv", "texte offre")
+
+    assert result.overall_score == 39.4
+    assert result.semantic_score == 39.4
+    assert result.skill_coverage_score is None
+    assert result.matched_skills == []
+    assert result.missing_skills == []
 
 
 # --- Test d'intégration (PAS mocké) ---

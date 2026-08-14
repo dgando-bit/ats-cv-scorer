@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import upload
+from app.routers import match, upload
 
 app = FastAPI(
     title="ATS CV Scorer API",
@@ -30,7 +30,4 @@ def root():
 
 
 app.include_router(upload.router, prefix="/api/cv", tags=["cv"])
-
-# Les prochains routers (score, match) seront branchés de la même façon :
-# from app.routers import score, match
-# app.include_router(score.router, prefix="/api/score", tags=["score"])
+app.include_router(match.router, prefix="/api/match", tags=["match"])

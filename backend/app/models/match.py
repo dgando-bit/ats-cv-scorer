@@ -11,8 +11,13 @@ class MatchResult(BaseModel):
     semantic_score: float = Field(
         ..., description="Score de similarité sémantique globale CV/offre (0-100)"
     )
-    skill_coverage_score: float = Field(
-        ..., description="Pourcentage des compétences requises par l'offre trouvées dans le CV (0-100)"
+    skill_coverage_score: float | None = Field(
+        default=None,
+        description=(
+            "Pourcentage des compétences requises par l'offre trouvées dans le CV (0-100). "
+            "None si aucune compétence technique n'a été détectée dans l'offre (auquel cas "
+            "le score global repose entièrement sur la similarité sémantique)."
+        ),
     )
     matched_skills: list[str] = Field(
         default_factory=list, description="Compétences requises par l'offre, trouvées dans le CV"
